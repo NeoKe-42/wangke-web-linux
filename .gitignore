@@ -1,0 +1,19 @@
+node_modules/
+/.svelte-kit
+/build
+pnpm-lock.yaml
+
+# Local disk images are large; build them with scripts/build-image.sh
+custom-disk-images/*
+!custom-disk-images/.gitkeep
+
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+/test-results
+/playwright-report
+
+*.log

@@ -1,0 +1,8 @@
+Projects
+========
+
+Edit dockerfiles/home/projects.txt before building the disk image to put
+your real project list here; this placeholder is what ships by default.
+
+- wangke-web-linux: this browser-side Linux environment itself
+  (WebVM/CheerpX + Svelte + TypeScript + Vite + xterm.js)

@@ -1,0 +1,64 @@
+# WangKe Web Linux root filesystem.
+#
+# Built as an i386 image (CheerpX emulates 32-bit x86) and converted to an
+# .ext2 disk image by scripts/build-image.sh (local) or by the Deploy
+# workflow (.github/workflows/deploy.yml).
+#
+# Keep the installed package set lean: GitHub Pages hosts the image as
+# 128k chunks and the workflow allocates IMAGE_SIZE (default 900M, hard
+# limit ~950M) for the filesystem.
+FROM --platform=linux/386 docker.io/i386/debian:buster
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Buster is EOL: point APT at the archived mirrors.
+RUN echo "deb [trusted=yes] http://archive.debian.org/debian buster main contrib non-free" \
+		> /etc/apt/sources.list && \
+	echo "deb [trusted=yes] http://archive.debian.org/debian-security buster/updates main" \
+		>> /etc/apt/sources.list && \
+	echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid-until
+
+RUN apt-get clean && apt-get update && apt-get -y upgrade && \
+	apt-get -y install --no-install-recommends \
+		bash \
+		bash-completion \
+		ca-certificates \
+		coreutils \
+		curl \
+		file \
+		gcc \
+		git \
+		htop \
+		libc6-dev \
+		less \
+		make \
+		nano \
+		neofetch \
+		procps \
+		python3 \
+		tree \
+		vim \
+		wget && \
+	apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Default user / host: wangke@web-linux
+RUN useradd -m -s /bin/bash wangke && \
+	echo "wangke:wangke" | chpasswd && \
+	echo "root:wangke" | chpasswd && \
+	echo "web-linux" > /etc/hostname && \
+	printf "127.0.0.1\tlocalhost web-linux\n::1\t\tlocalhost web-linux ip6-localhost ip6-loopback\n" > /etc/hosts
+
+# Preset files in the home directory.
+COPY dockerfiles/home/README.txt dockerfiles/home/projects.txt dockerfiles/home/papers.txt dockerfiles/home/welcome.sh /home/wangke/
+
+# Welcome message for login shells (bash --login reads /etc/profile).
+COPY dockerfiles/home/welcome.sh /etc/profile.d/00-wangke-welcome.sh
+
+RUN chown -R wangke:wangke /home/wangke && \
+	chmod 755 /home/wangke/welcome.sh /etc/profile.d/00-wangke-welcome.sh && \
+	printf '\n# WangKe Web Linux: fixed prompt (the emulated kernel hostname may differ)\nPS1="\\u@web-linux:\\w\\$ "\n' >> /home/wangke/.bashrc
+
+# Extracted by the image build tooling as the VM cwd / env.
+WORKDIR /home/wangke/
+ENV HOME="/home/wangke" TERM="xterm" USER="wangke" SHELL="/bin/bash" EDITOR="vim" LANG="C.UTF-8"
+
+CMD [ "/bin/bash" ]

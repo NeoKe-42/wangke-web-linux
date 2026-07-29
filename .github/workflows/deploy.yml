@@ -1,0 +1,142 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      DOCKERFILE_PATH:
+        type: string
+        description: 'Path to the Dockerfile used for the disk image'
+        required: true
+        default: 'dockerfiles/wangke_debian'
+      IMAGE_SIZE:
+        type: string
+        description: 'Disk image size (950M max for GitHub Pages)'
+        required: true
+        default: '900M'
+      SKIP_IMAGE_BUILD:
+        type: boolean
+        description: 'Skip the disk image build and deploy with the official cloud image'
+        required: true
+        default: false
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TAG: wangke-web-linux-image
+      DEPLOY_DIR: /wkweb_deploy
+      DOCKERFILE_PATH: ${{ github.event.inputs.DOCKERFILE_PATH || 'dockerfiles/wangke_debian' }}
+      IMAGE_SIZE: ${{ github.event.inputs.IMAGE_SIZE || '900M' }}
+      SKIP_IMAGE_BUILD: ${{ github.event.inputs.SKIP_IMAGE_BUILD || false }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - name: Generate the image name
+        run: echo "IMAGE_NAME=$(basename "$DOCKERFILE_PATH")_$(date +%Y%m%d)_${{ github.run_id }}.ext2" >> "$GITHUB_ENV"
+
+      - name: Create the deploy directory
+        run: |
+          sudo mkdir -p "$DEPLOY_DIR"
+          sudo chown "$(id -u):$(id -g)" "$DEPLOY_DIR"
+
+      # --- Disk image -------------------------------------------------------
+
+      - name: Build the i386 Docker image
+        if: env.SKIP_IMAGE_BUILD != 'true'
+        run: docker build . --tag "$TAG" --file "$DOCKERFILE_PATH" --platform=i386
+
+      - name: Extract CMD / ENV / CWD from the image
+        if: env.SKIP_IMAGE_BUILD != 'true'
+        run: |
+          docker run --dns 8.8.8.8 --dns 8.8.4.4 -d "$TAG"
+          cid=$(docker ps -aq | head -1)
+          echo "CONTAINER_ID=$cid" >> "$GITHUB_ENV"
+          cmd_json=$(docker inspect --format='{{json .Config.Cmd}}' "$cid")
+          vm_cmd=$(echo "$cmd_json" | jq -r '.[0]')
+          echo "VM_CMD=$vm_cmd" >> "$GITHUB_ENV"
+          if [ "$vm_cmd" = "/bin/bash" ] || [ "$vm_cmd" = "/bin/sh" ]; then
+            echo 'VM_ARGS=["--login"]' >> "$GITHUB_ENV"
+          else
+            echo "VM_ARGS=$(echo "$cmd_json" | jq -c '.[1:]')" >> "$GITHUB_ENV"
+          fi
+          echo "VM_ENV=$(docker inspect --format='{{json .Config.Env}}' "$cid" | jq -c 'map(select(startswith("HOSTNAME=") | not))')" >> "$GITHUB_ENV"
+          echo "VM_CWD=$(docker inspect --format='{{json .Config.WorkingDir}}' "$cid" | jq -r '.')" >> "$GITHUB_ENV"
+
+      - name: Create the ext2 image
+        if: env.SKIP_IMAGE_BUILD != 'true'
+        run: |
+          sudo fallocate -l "$IMAGE_SIZE" "$IMAGE_NAME"
+          # Revision 0 ext2: required by the CheerpX block driver.
+          sudo mkfs.ext2 -r 0 -F "$IMAGE_NAME"
+          sudo mkdir -p /mnt/wkweb
+          sudo mount -o loop -t ext2 "$IMAGE_NAME" /mnt/wkweb
+
+      - name: Export the container filesystem into the image
+        if: env.SKIP_IMAGE_BUILD != 'true'
+        run: |
+          sudo docker cp -a "$CONTAINER_ID":/ /mnt/wkweb/
+          sudo umount /mnt/wkweb
+
+      # The image is hosted next to the app, split into small (compressible)
+      # chunks that CheerpX's GitHubDevice fetches on demand.
+      - name: Split the image into chunks
+        if: env.SKIP_IMAGE_BUILD != 'true'
+        run: |
+          sudo split "$IMAGE_NAME" "$DEPLOY_DIR/$IMAGE_NAME.c" -a 6 -b 128k -x --additional-suffix=.txt
+          sudo bash -c "stat -c%s '$IMAGE_NAME' > '$DEPLOY_DIR/$IMAGE_NAME.meta'"
+          sudo chown -R "$(id -u):$(id -g)" "$DEPLOY_DIR"
+
+      # --- App ---------------------------------------------------------------
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the app
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+          VITE_DISK_IMAGE_TYPE: ${{ env.SKIP_IMAGE_BUILD == 'true' && 'cloud' || 'github' }}
+          VITE_DISK_IMAGE_URL: ${{ env.SKIP_IMAGE_BUILD == 'true' && '' || env.IMAGE_NAME }}
+          VITE_VM_CMD: ${{ env.VM_CMD }}
+          VITE_VM_ARGS: ${{ env.VM_ARGS }}
+          VITE_VM_ENV: ${{ env.VM_ENV }}
+          VITE_VM_CWD: ${{ env.VM_CWD }}
+        run: npm run build
+
+      - name: Assemble the deploy directory
+        run: |
+          mv build/* "$DEPLOY_DIR"/
+          # CheerpX's GitHubDevice enumerates directories through index.list files.
+          find "$DEPLOY_DIR" -type d | while read -r dir; do
+            ls "$dir" > "$dir/index.list"
+          done
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.DEPLOY_DIR }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

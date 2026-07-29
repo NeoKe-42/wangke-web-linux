@@ -1,0 +1,10 @@
+Papers
+======
+
+Edit dockerfiles/home/papers.txt before building the disk image to put
+your real reading list here; this placeholder is what ships by default.
+
+- WebVM: server-less x86 virtual machines in the browser
+  https://leaningtech.com/webvm-server-less-x86-virtual-machines-in-the-browser/
+- Crafting the Impossible: X86 Virtualization in the Browser with WebAssembly
+  https://www.youtube.com/watch?v=VqrbVycTXmw

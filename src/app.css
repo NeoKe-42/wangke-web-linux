@@ -1,0 +1,80 @@
+@import '@xterm/xterm/css/xterm.css';
+
+@tailwind base;
+@tailwind utilities;
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	background: #0c0c0c;
+	overflow: hidden;
+}
+
+body {
+	font-family:
+		ui-monospace,
+		'Cascadia Mono',
+		'JetBrains Mono',
+		Menlo,
+		Consolas,
+		'DejaVu Sans Mono',
+		monospace;
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Let xterm fill its absolutely-positioned container. */
+.terminal-scroll .xterm {
+	height: 100%;
+}
+
+/* Slim terminal scrollbar. */
+.terminal-scroll {
+	scrollbar-color: #52525b transparent;
+}
+.terminal-scroll::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+.terminal-scroll::-webkit-scrollbar-thumb {
+	background: #52525b;
+	border-radius: 3px;
+}
+.terminal-scroll::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+/* On-screen helper keys: touch devices only. */
+.touch-keys {
+	display: none;
+}
+@media (pointer: coarse) {
+	.touch-keys {
+		display: flex;
+	}
+}
+
+.key {
+	min-width: 2.5rem;
+	padding: 0.5rem 0.2rem;
+	border-radius: 0.375rem;
+	border: 1px solid #3f3f46;
+	background: #18181b;
+	color: #d4d4d8;
+	font-size: 0.7rem;
+	line-height: 1;
+	font-family: inherit;
+	text-align: center;
+	user-select: none;
+	-webkit-user-select: none;
+	touch-action: manipulation;
+}
+.key:active {
+	background: #27272a;
+}
+.key-active {
+	background: #16a34a;
+	border-color: #16a34a;
+	color: #052e16;
+	font-weight: 700;
+}
