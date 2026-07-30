@@ -4,6 +4,8 @@
 
 基于 [leaningtech/webvm](https://github.com/leaningtech/webvm)（Apache-2.0）二次开发，虚拟机层直接复用 WebVM/CheerpX，界面与工程完全重写。
 
+**在线演示：<https://neoke-42.github.io/wangke-web-linux/>**（首次打开会注册 Service Worker 并自动刷新一次；随后启动 CI 构建的 `wangke@web-linux` 镜像，约需 1–2 分钟流式加载分块镜像）。
+
 ## 功能
 
 - 全屏深色终端（xterm.js + 等宽字体），顶部状态栏显示 VM 状态、网络状态、磁盘活动，提供重启 / 全屏 / 设置按钮
@@ -101,6 +103,15 @@ npm run test:e2e     # Playwright 端到端冒烟测试
 ```
 
 端到端测试（`tests/e2e/vm.spec.ts`）会在无头 Chromium 中**真实启动 VM** 并执行 `echo $((40+2))`、`uname -s`、`python3 -c "print(6*7)"` 验证命令真实运行，同时验证触屏辅助按键。首次运行需下载 Chromium（`npx playwright install chromium`，装在用户目录，不动全局环境）。
+
+部署完成后，可用以下命令对线上站点做冒烟验证（启动真实 VM 并执行命令）：
+
+```sh
+node scripts/verify-live.mjs                      # 默认验证 neoke-42.github.io/wangke-web-linux
+node scripts/verify-live.mjs https://your/url/    # 或指定地址
+```
+
+> 提交信息中包含 `[skip ci]` 时，部署工作流会跳过本次构建（仅文档/脚本改动时使用）。
 
 ## 已知限制
 
