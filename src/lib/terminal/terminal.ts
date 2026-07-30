@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 
 export const MONO_FONT =
-	'ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+	'ui-monospace, "Cascadia Mono", "JetBrains Mono", "Sarasa Mono SC", "Noto Sans Mono CJK SC", Menlo, Consolas, "Microsoft YaHei", "PingFang SC", "DejaVu Sans Mono", monospace';
 
 export interface TerminalHandle {
 	term: Terminal;

@@ -4,11 +4,47 @@ alias ls='ls --color=auto'
 alias grep='grep --color=auto'
 alias diff='diff --color=auto'
 
-# Browser integration: xterm.js handles this private OSC sequence and opens
-# the project blog. The plain URL remains as a clickable popup-blocker fallback.
+# Browser integration: choose a page in Bash, then xterm.js handles the private
+# OSC sequence. Plain URLs remain clickable popup-blocker fallbacks.
 blog() {
-	printf '\033]777;wangke:open-blog\007'
-	printf 'Blog: https://neoke-42.github.io/wangke-web-linux/blog\n'
+	local selection blog_target blog_url
+
+	while :; do
+		printf '\nWangKe Blog\n'
+		printf '  1) 所有文章\n'
+		printf '  2) WebVM 冷启动优化\n'
+		printf '  3) 浏览器 Linux 架构\n'
+		printf '  q) 取消\n'
+		printf '请选择 [1-3, q]: '
+
+		IFS= read -r selection || return 1
+		case "$selection" in
+			1)
+				blog_target='index'
+				blog_url='https://neoke-42.github.io/wangke-web-linux/blog'
+				;;
+			2)
+				blog_target='webvm-cold-start'
+				blog_url='https://neoke-42.github.io/wangke-web-linux/blog/webvm-cold-start'
+				;;
+			3)
+				blog_target='browser-native-linux'
+				blog_url='https://neoke-42.github.io/wangke-web-linux/blog/browser-native-linux'
+				;;
+			q|Q)
+				printf '已取消。\n'
+				return 0
+				;;
+			*)
+				printf '无效选项，请重新选择。\n'
+				continue
+				;;
+		esac
+
+		printf '\033]777;wangke:open-blog;%s\007' "$blog_target"
+		printf 'Opening: %s\n' "$blog_url"
+		return 0
+	done
 }
 
 PS1='\[\033[01;32m\]\u@web-linux\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '

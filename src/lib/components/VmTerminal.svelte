@@ -24,6 +24,12 @@
 	let handle: VmHandle | null = null;
 	let skipUnloadConfirm = false;
 
+	const BLOG_ROUTES: Readonly<Record<string, string>> = {
+		'wangke:open-blog;index': '/blog',
+		'wangke:open-blog;webvm-cold-start': '/blog/webvm-cold-start',
+		'wangke:open-blog;browser-native-linux': '/blog/browser-native-linux'
+	};
+
 	/** Applies one-shot Ctrl/Alt sticky modifiers (set by MobileKeys) to input. */
 	function send(data: string) {
 		if (!handle) return;
@@ -102,15 +108,16 @@
 		const term = termHandle.term;
 		term.onData(send);
 		term.parser.registerOscHandler(777, (data) => {
-			if (data !== 'wangke:open-blog') return false;
+			const blogPath = BLOG_ROUTES[data];
+			if (!blogPath) return false;
 
-			const blogUrl = new URL(`${base}/blog`, window.location.origin).href;
+			const blogUrl = new URL(`${base}${blogPath}`, window.location.origin).href;
 			const blogWindow = window.open(blogUrl, '_blank');
 			if (blogWindow) {
 				blogWindow.opener = null;
 			} else {
 				queueMicrotask(() => {
-					term.writeln(`\r\n\x1b[33mPopup blocked.\x1b[0m Open the Blog URL printed below.`);
+					term.writeln(`\r\n\x1b[33mPopup blocked.\x1b[0m Open the URL printed below.`);
 				});
 			}
 			return true;
