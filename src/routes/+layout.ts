@@ -1,3 +1,3 @@
-// Fully static SPA: prerender the shell at build time, run everything client-side.
+// Fully static output for GitHub Pages. The terminal page opts out of SSR
+// separately; blog pages remain prerendered for direct URLs and search.
 export const prerender = true;
-export const ssr = false;

@@ -16,8 +16,12 @@ body {
 		ui-monospace,
 		'Cascadia Mono',
 		'JetBrains Mono',
+		'Sarasa Mono SC',
+		'Noto Sans Mono CJK SC',
 		Menlo,
 		Consolas,
+		'Microsoft YaHei',
+		'PingFang SC',
 		'DejaVu Sans Mono',
 		monospace;
 	-webkit-font-smoothing: antialiased;

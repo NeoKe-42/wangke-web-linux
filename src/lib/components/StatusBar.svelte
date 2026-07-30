@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
+	import { base } from '$app/paths';
 	import { vmPhase, diskActive, settingsOpen } from '$lib/stores';
 	import { connectionState, currentIp } from '$lib/vm/network';
 	import type { VmPhase } from '$lib/vm/types';
@@ -87,6 +88,16 @@
 
 	<div class="flex-1"></div>
 
+	<a
+		class={btn}
+		href={`${base}/blog`}
+		target="_blank"
+		rel="noreferrer"
+		title="Open blog in a new tab"
+		aria-label="Open blog"
+	>
+		<span class="hidden sm:inline">Blog</span><span class="sm:hidden">文</span>
+	</a>
 	<button class={btn} title="Restart VM" aria-label="Restart VM" on:click={() => dispatch('restart')}>
 		⟳
 	</button>
