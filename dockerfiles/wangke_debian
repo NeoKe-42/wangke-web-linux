@@ -41,11 +41,12 @@ RUN apt-get clean && apt-get update && apt-get -y upgrade && \
 	apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Default user / host: wangke@web-linux
+# (Do not write /etc/hosts here: Docker bind-mounts it read-only during
+# build. The VM prompt is fixed via PS1 in .bashrc below.)
 RUN useradd -m -s /bin/bash wangke && \
 	echo "wangke:wangke" | chpasswd && \
 	echo "root:wangke" | chpasswd && \
-	echo "web-linux" > /etc/hostname && \
-	printf "127.0.0.1\tlocalhost web-linux\n::1\t\tlocalhost web-linux ip6-localhost ip6-loopback\n" > /etc/hosts
+	echo "web-linux" > /etc/hostname
 
 # Preset files in the home directory.
 COPY dockerfiles/home/README.txt dockerfiles/home/projects.txt dockerfiles/home/papers.txt dockerfiles/home/welcome.sh /home/wangke/
