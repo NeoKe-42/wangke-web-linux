@@ -1,0 +1,6 @@
+# WangKe Web Linux: colored prompt (fixed hostname) + color aliases.
+force_color_prompt=yes
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias diff='diff --color=auto'
+PS1='\[\033[01;32m\]\u@web-linux\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '

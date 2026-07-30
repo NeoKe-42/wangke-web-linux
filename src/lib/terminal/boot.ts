@@ -16,6 +16,18 @@ export function bootStamp(): string {
 	return `[${seconds.toFixed(6).padStart(11, ' ')}]`;
 }
 
+const CYAN = '\x1b[36m';
+const GREEN = '\x1b[32m';
+const BRIGHT = '\x1b[1;37m';
+const RESET = '\x1b[0m';
+
+/** Cyan timestamp + bright message, like a colored dmesg line. */
+function colorize(line: string): string {
+	const m = line.match(/^(\[[^\]]*\])(.*)$/);
+	if (!m) return line;
+	return `${CYAN}${m[1]}${RESET}${BRIGHT}${m[2]}${RESET}`;
+}
+
 /** Types the simulated boot log line by line. */
 export async function playBootLog(
 	term: Terminal,
@@ -24,12 +36,12 @@ export async function playBootLog(
 ): Promise<void> {
 	resetBootClock();
 	for (const line of lines) {
-		term.writeln(line);
+		term.writeln(colorize(line));
 		await sleep(lineDelayMs + Math.random() * 150);
 	}
 }
 
 /** Writes a real status line (actual elapsed time) while the VM loads. */
 export function writeStatus(term: Terminal, message: string): void {
-	term.writeln(`${bootStamp()} ${message}`);
+	term.writeln(`${CYAN}${bootStamp()}${RESET} ${GREEN}${message}${RESET}`);
 }

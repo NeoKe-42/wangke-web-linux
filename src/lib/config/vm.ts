@@ -15,7 +15,7 @@ function parseStringArray(raw: string | undefined, fallback: string[]): string[]
 
 const WANGKE_ENV = [
 	'HOME=/home/wangke',
-	'TERM=xterm',
+	'TERM=xterm-256color',
 	'USER=wangke',
 	'SHELL=/bin/bash',
 	'EDITOR=vim',
@@ -25,7 +25,7 @@ const WANGKE_ENV = [
 
 const OFFICIAL_ENV = [
 	'HOME=/home/user',
-	'TERM=xterm',
+	'TERM=xterm-256color',
 	'USER=user',
 	'SHELL=/bin/bash',
 	'EDITOR=vim',
@@ -107,17 +107,17 @@ export const bootLines: string[] = [
  */
 export const fallbackIntro: string[] = [
 	'',
-	'Welcome to WangKe Web Linux',
+	'\x1b[1;32mWelcome to WangKe Web Linux\x1b[0m',
 	'',
 	'This Linux environment runs entirely inside your browser.',
 	'No remote SSH server is being used.',
 	'',
-	'Note: no custom image configured - running the official WebVM Debian',
+	'\x1b[33mNote:\x1b[0m no custom image configured - running the official WebVM Debian',
 	'image, so you are logged in as "user" instead of "wangke@web-linux".',
 	'Build the custom image (see README.md) to get the full wangke',
 	'environment with README.txt / projects.txt / papers.txt.',
 	'',
-	'Try:',
+	'\x1b[36mTry:\x1b[0m',
 	'  ls',
 	'  python3',
 	'  gcc --version',

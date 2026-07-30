@@ -12,7 +12,7 @@ export interface TerminalHandle {
 }
 
 export function defaultFontSize(): number {
-	return window.innerWidth < 640 ? 12 : 14;
+	return window.innerWidth < 640 ? 13 : 15;
 }
 
 export function createTerminal(el: HTMLElement): TerminalHandle {
@@ -23,7 +23,8 @@ export function createTerminal(el: HTMLElement): TerminalHandle {
 		fontSize: defaultFontSize(),
 		fontWeight: 400,
 		fontWeightBold: 700,
-		scrollback: 5000,
+		lineHeight: 1.12,
+		scrollback: 2000,
 		theme: {
 			background: '#0c0c0c',
 			foreground: '#e6e6e6',

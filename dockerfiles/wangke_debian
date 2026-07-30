@@ -32,6 +32,7 @@ RUN apt-get clean && apt-get update && apt-get -y upgrade && \
 		less \
 		make \
 		nano \
+		ncurses-bin \
 		neofetch \
 		procps \
 		python3 \
@@ -54,12 +55,16 @@ COPY dockerfiles/home/README.txt dockerfiles/home/projects.txt dockerfiles/home/
 # Welcome message for login shells (bash --login reads /etc/profile).
 COPY dockerfiles/home/welcome.sh /etc/profile.d/00-wangke-welcome.sh
 
+# Colored prompt + color aliases (kept in a file to avoid shell-escaping pain).
+COPY dockerfiles/home/bashrc_addon /tmp/bashrc_addon
+
 RUN chown -R wangke:wangke /home/wangke && \
 	chmod 755 /home/wangke/welcome.sh /etc/profile.d/00-wangke-welcome.sh && \
-	printf '\n# WangKe Web Linux: fixed prompt (the emulated kernel hostname may differ)\nPS1="\\u@web-linux:\\w\\$ "\n' >> /home/wangke/.bashrc
+	cat /tmp/bashrc_addon >> /home/wangke/.bashrc && rm /tmp/bashrc_addon
 
 # Extracted by the image build tooling as the VM cwd / env.
+# xterm-256color so vim/htop/neofetch/ls render full color.
 WORKDIR /home/wangke/
-ENV HOME="/home/wangke" TERM="xterm" USER="wangke" SHELL="/bin/bash" EDITOR="vim" LANG="C.UTF-8"
+ENV HOME="/home/wangke" TERM="xterm-256color" USER="wangke" SHELL="/bin/bash" EDITOR="vim" LANG="C.UTF-8"
 
 CMD [ "/bin/bash" ]
