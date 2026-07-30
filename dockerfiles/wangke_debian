@@ -58,8 +58,11 @@ COPY dockerfiles/home/welcome.sh /etc/profile.d/00-wangke-welcome.sh
 # Colored prompt + color aliases (kept in a file to avoid shell-escaping pain).
 COPY dockerfiles/home/bashrc_addon /tmp/bashrc_addon
 
+# Entrypoint that pre-warms common commands before showing the prompt.
+COPY dockerfiles/home/wangke-start /usr/local/bin/wangke-start
+
 RUN chown -R wangke:wangke /home/wangke && \
-	chmod 755 /home/wangke/welcome.sh /etc/profile.d/00-wangke-welcome.sh && \
+	chmod 755 /home/wangke/welcome.sh /etc/profile.d/00-wangke-welcome.sh /usr/local/bin/wangke-start && \
 	cat /tmp/bashrc_addon >> /home/wangke/.bashrc && rm /tmp/bashrc_addon
 
 # Extracted by the image build tooling as the VM cwd / env.
@@ -67,4 +70,6 @@ RUN chown -R wangke:wangke /home/wangke && \
 WORKDIR /home/wangke/
 ENV HOME="/home/wangke" TERM="xterm-256color" USER="wangke" SHELL="/bin/bash" EDITOR="vim" LANG="C.UTF-8"
 
-CMD [ "/bin/bash" ]
+# wangke-start warms common commands, then execs the login shell. The Deploy
+# workflow extracts this as VITE_VM_CMD with an empty argument list.
+CMD [ "/usr/local/bin/wangke-start" ]

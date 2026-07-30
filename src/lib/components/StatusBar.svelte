@@ -24,7 +24,7 @@
 	}
 
 	const netLabel: Record<NetState, string> = {
-		DISCONNECTED: 'Offline',
+		DISCONNECTED: 'Relay off',
 		DOWNLOADING: 'Net: waiting',
 		LOGINSTARTING: 'Net: login…',
 		LOGINREADY: 'Net: login…',

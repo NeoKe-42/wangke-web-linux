@@ -1,0 +1,26 @@
+#!/bin/bash
+# WangKe Web Linux entrypoint.
+#
+# Pre-warms a small set of frequently used commands so that the first time the
+# user runs them at the interactive prompt they are already fast: their disk
+# blocks have been paged in and CheerpX has JIT-compiled them. The warm-up
+# runs silently before the login shell (and therefore before the prompt) and
+# any single failure is ignored so it can never block the shell.
+#
+# PATH is set explicitly because CheerpX launches the CMD with a custom env
+# that does not include PATH; this keeps the warm-up robust regardless of the
+# shell's built-in default PATH.
+
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
+
+printf '\033[90mPreparing frequently used commands...\033[0m\n'
+
+ls / >/dev/null 2>&1 || true
+free -h >/dev/null 2>&1 || true
+df -h >/dev/null 2>&1 || true
+python3 -c "pass" >/dev/null 2>&1 || true
+git --version >/dev/null 2>&1 || true
+
+printf '\033[32mSystem ready.\033[0m\n'
+
+exec /bin/bash --login

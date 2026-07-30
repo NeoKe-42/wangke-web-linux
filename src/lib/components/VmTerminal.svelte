@@ -14,6 +14,7 @@
 		type VmIo
 	} from '$lib/vm/machine';
 	import { vmConfig, bootLines, fallbackIntro } from '$lib/config/vm';
+	import { clearDiskDownloadCache } from '$lib/vm/diskCache';
 	import { vmPhase, vmError, diskActive, stickyCtrl, stickyAlt } from '$lib/stores';
 
 	let consoleEl: HTMLDivElement;
@@ -73,6 +74,16 @@
 			} catch {
 				// reload anyway; the cache stays as-is if reset failed
 			}
+		}
+		location.reload();
+	}
+
+	async function clearDiskCache() {
+		skipUnloadConfirm = true;
+		try {
+			await clearDiskDownloadCache();
+		} catch {
+			// reload anyway; the cache stays as-is if delete failed
 		}
 		location.reload();
 	}
@@ -157,5 +168,5 @@
 	</div>
 
 	<MobileKeys send={send} />
-	<SettingsDialog on:restart={restart} on:reset={resetSystem} />
+	<SettingsDialog on:restart={restart} on:reset={resetSystem} on:clearDiskCache={clearDiskCache} />
 </div>

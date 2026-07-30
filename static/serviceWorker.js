@@ -1,48 +1,190 @@
-async function handleFetch(request) {
-	// Perform the original fetch request and store the result in order to modify the response.
-	try {
-		var r = await fetch(request);
+// Service worker for WangKe Web Linux.
+//
+// Two responsibilities:
+//   1. Inject COOP/COEP/CORP headers on every response so cross-origin
+//      isolation (SharedArrayBuffer) works on hosts that cannot set headers
+//      (e.g. GitHub Pages). This is the original WebVM behaviour.
+//   2. Persistently cache the CheerpX GitHubDevice disk blocks (ext2 chunks,
+//      the .meta file and the relevant index.list) so that, after the first
+//      load, command execution no longer waits on the network for blocks that
+//      have already been read. Only blocks CheerpX actually touches are
+//      cached; the whole image is never pre-downloaded.
+
+const DISK_CACHE = "wangke-web-linux-disk-v1";
+const IDENTITY_CACHE = "wangke-web-linux-disk-identity-v1";
+const IDENTITY_KEY = "__disk_image_identity__";
+
+const CHUNK_RE = /\.ext2\.c[0-9a-f]+\.txt$/i;
+const META_RE = /\.ext2\.meta$/i;
+
+// SW-global state (lives as long as this worker instance, i.e. across page
+// reloads within one browser session).
+let diskDir = null;        // pathname directory of the active disk image
+let knownIdentity = null;  // last image identity we observed
+
+/** Extract the ext2 base name ("foo_20260730_123.ext2") from a chunk/meta URL. */
+function getDiskImageIdentity(url) {
+	const m = String(url).match(/([^/]+\.ext2)\.(?:c[0-9a-f]+\.txt|meta)$/i);
+	return m ? m[1] : null;
+}
+
+function isIndexPathname(pathname) {
+	return pathname.endsWith("/index.list") || pathname === "index.list";
+}
+
+function directoryOf(url) {
+	return new URL(url).pathname.replace(/[^/]*$/, "");
+}
+
+/**
+ * True for CheerpX disk reads we want to cache. The app never references
+ * index.list itself, so any index.list the worker observes is a CheerpX
+ * httpfs directory listing; we still scope it to the disk image directory.
+ */
+function isDiskRequest(request) {
+	if (request.method !== "GET") return false;
+	const url = new URL(request.url);
+	if (CHUNK_RE.test(url.pathname) || META_RE.test(url.pathname)) return true;
+	if (isIndexPathname(url.pathname)) {
+		const dir = directoryOf(url);
+		if (diskDir === null) {
+			diskDir = dir; // first listing we see defines the disk directory
+			return true;
+		}
+		return dir === diskDir;
 	}
-	catch (e) {
-		console.error(e)
-	}
-	if (r.status === 0) {
-		return r;
-	}
-	// We add headers to the original response its headers, in order to enable cross-origin-isolation. And make it independent of the server config.
+	return false;
+}
+
+/** Build a response with the cross-origin-isolation headers applied. */
+function patchResponseHeaders(r) {
 	const newHeaders = new Headers(r.headers);
-	// COEP & COOP for cross-origin-isolation.
 	newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
 	newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
 	newHeaders.set("Cross-Origin-Resource-Policy", "cross-origin");
-	/**
-	 * This workaround is necessary due to a limitation of CheerpOS, which relies on the response URL being set to the resolved URL.
-	 * When constructing a new response object, the URL is not set by the Response() constructor and the serviceworker respondwith() method will set the url to event.request.url in case of an empty string.
-	 * To address this, we set the location URL to the resolved response URL and set the status code to 301 in the new Response object.
-	 * This causes the request to bounce back to the serviceworker from Cheerpos, with the event.request.url now set to the resolved URL, which allows the respondWith method to properly set the response URL in our new response.
-	 * https://developer.mozilla.org/en-US/docs/Web/API/FetchEvent/respondWith.
-	*/
-	if (r.redirected === true)
-		newHeaders.set("location", r.url);
-	// In case of a redirection, we set the status to 301, and body to null, in order to not transfer too much data needlessly
-	const moddedResponse = new Response(r.redirected === true ? null : r.body, {
+	// CheerpOS needs the resolved URL; bounce redirected requests back through
+	// the worker with a 301 + location header (original WebVM workaround).
+	if (r.redirected === true) newHeaders.set("location", r.url);
+	return new Response(r.redirected === true ? null : r.body, {
 		headers: newHeaders,
 		status: r.redirected === true ? 301 : r.status,
 		statusText: r.statusText,
 	});
-	return moddedResponse;
+}
+
+/** Network fetch with header patching; propagates network errors cleanly. */
+async function fetchAndPatch(request) {
+	let r;
+	try {
+		r = await fetch(request);
+	} catch (error) {
+		// Network failure: never touch an undefined response, just propagate.
+		throw error;
+	}
+	// Opaque responses carry no readable headers/body; pass them through as-is.
+	if (r.status === 0 || r.type === "opaque") return r;
+	return patchResponseHeaders(r);
+}
+
+/**
+ * Drop blocks that belong to a previous image and any cached directory
+ * listing (the listing changes between deploys). The current image's blocks
+ * are kept, so a normal reload never loses its cache.
+ */
+async function cleanupOldDiskEntries(cache, currentIdentity) {
+	const keys = await cache.keys();
+	for (const req of keys) {
+		const pathname = new URL(req.url).pathname;
+		const id = getDiskImageIdentity(req.url);
+		if (isIndexPathname(pathname)) {
+			await cache.delete(req); // stale listing; re-fetched on demand
+		} else if (id && id !== currentIdentity) {
+			await cache.delete(req); // previous image's chunks / meta
+		}
+	}
+}
+
+/**
+ * Remember the active image and, when it changes, clean up the previous one
+ * in the background. The persisted marker means a plain reload of the same
+ * image does NOT trigger cleanup (so the cache survives refreshes).
+ */
+function noteIdentity(identity) {
+	knownIdentity = identity; // set synchronously to avoid duplicate triggers
+	return (async () => {
+		try {
+			const idCache = await caches.open(IDENTITY_CACHE);
+			const markerResp = await idCache.match(IDENTITY_KEY);
+			const marker = markerResp ? await markerResp.text() : null;
+			if (marker && marker !== identity) {
+				const cache = await caches.open(DISK_CACHE);
+				await cleanupOldDiskEntries(cache, identity);
+			}
+			await idCache.put(IDENTITY_KEY, new Response(identity));
+		} catch (e) {
+			console.log("Disk cache version cleanup failed:", e);
+		}
+	})();
+}
+
+/** Cache-first read for disk blocks; stores only successful basic responses. */
+async function handleDiskFetch(request) {
+	const cache = await caches.open(DISK_CACHE);
+	const cached = await cache.match(request);
+	if (cached) return cached;
+
+	let response;
+	try {
+		response = await fetchAndPatch(request);
+	} catch (error) {
+		// Network failed: if a cache entry exists (defensive), use it; else
+		// keep the current error behaviour.
+		const fallback = await cache.match(request);
+		if (fallback) return fallback;
+		throw error;
+	}
+
+	// Cache the already-patched response. A constructed Response has type
+	// "default" (not "basic"); opaque responses are already excluded inside
+	// fetchAndPatch, so "not opaque" + ok + 200 is the correct gate.
+	if (response && response.ok && response.status === 200 && response.type !== "opaque") {
+		// clone because the body stream is consumed by the returned response
+		void cache.put(request, response.clone()).catch(() => {});
+	}
+	return response;
 }
 
 function serviceWorkerInit() {
-	// Init the service worker.
 	self.addEventListener("install", () => self.skipWaiting());
-	self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
-	// Listen for fetch requests and call handleFetch function.
+	self.addEventListener("activate", (e) =>
+		e.waitUntil(
+			(async () => {
+				// Remove caches from other versions only; never the active ones.
+				const keep = new Set([DISK_CACHE, IDENTITY_CACHE]);
+				const names = await caches.keys();
+				await Promise.all(
+					names.map((n) =>
+						n.startsWith("wangke-web-linux-disk") && !keep.has(n) ? caches.delete(n) : null
+					)
+				);
+				await self.clients.claim();
+			})()
+		)
+	);
+
 	self.addEventListener("fetch", function (e) {
-		try {
-			e.respondWith(handleFetch(e.request));
-		} catch (err) {
-			console.log("Serviceworker NetworkError:" + err);
+		const request = e.request;
+		if (request.method === "GET" && isDiskRequest(request)) {
+			const identity = getDiskImageIdentity(request.url);
+			if (identity) diskDir = directoryOf(request.url);
+			// Run version cleanup in the background so it never delays the block.
+			if (identity && identity !== knownIdentity) {
+				e.waitUntil(noteIdentity(identity));
+			}
+			e.respondWith(handleDiskFetch(request));
+		} else {
+			// Everything else keeps the original header-injection behaviour.
+			e.respondWith(fetchAndPatch(request));
 		}
 	});
 }
@@ -59,7 +201,7 @@ async function doRegister() {
 				window.location.reload();
 			} catch (err) {
 				console.log("Service Worker failed reloading the page. ERROR:" + err);
-			};
+			}
 		});
 		// When the registration is active, but it's not controlling the page, we reload the page to have it take control.
 		// This f.e occurs when you hard-reload (shift + refresh). https://www.w3.org/TR/service-workers/#navigator-service-worker-controller
@@ -69,11 +211,10 @@ async function doRegister() {
 				window.location.reload();
 			} catch (err) {
 				console.log("Service Worker failed reloading the page. ERROR:" + err);
-			};
+			}
 		}
-	}
-	catch (e) {
-		console.error("Service Worker failed to register:", e)
+	} catch (e) {
+		console.error("Service Worker failed to register:", e);
 	}
 }
 
@@ -97,13 +238,12 @@ async function serviceWorkerRegister() {
 		return;
 	}
 	// Register the service worker and reload the page to transfer control to the serviceworker.
-	if ("serviceWorker" in navigator)
-		await doRegister();
-	else
-		console.log("Service worker is not supported in this browser");
+	if ("serviceWorker" in navigator) await doRegister();
+	else console.log("Service worker is not supported in this browser");
 }
 
-if (typeof window === 'undefined') // If the script is running in a Service Worker context
-	serviceWorkerInit()
-else // If the script is running in the browser context
-	serviceWorkerRegister();
+if (typeof window === "undefined")
+	// If the script is running in a Service Worker context
+	serviceWorkerInit();
+// If the script is running in the browser context
+else serviceWorkerRegister();

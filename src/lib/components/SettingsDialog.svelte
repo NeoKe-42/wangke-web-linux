@@ -11,11 +11,16 @@
 		dashboardUrl
 	} from '$lib/vm/network';
 
-	const dispatch = createEventDispatcher<{ restart: void; reset: void }>();
+	const dispatch = createEventDispatcher<{ restart: void; reset: void; clearDiskCache: void }>();
 
 	let confirmReset = false;
 	let confirmTimer: ReturnType<typeof setTimeout> | undefined;
-	onDestroy(() => clearTimeout(confirmTimer));
+	let confirmClearCache = false;
+	let confirmClearCacheTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => {
+		clearTimeout(confirmTimer);
+		clearTimeout(confirmClearCacheTimer);
+	});
 
 	function armReset() {
 		if (!confirmReset) {
@@ -26,6 +31,18 @@
 		clearTimeout(confirmTimer);
 		confirmReset = false;
 		dispatch('reset');
+		settingsOpen.set(false);
+	}
+
+	function armClearCache() {
+		if (!confirmClearCache) {
+			confirmClearCache = true;
+			confirmClearCacheTimer = setTimeout(() => (confirmClearCache = false), 3000);
+			return;
+		}
+		clearTimeout(confirmClearCacheTimer);
+		confirmClearCache = false;
+		dispatch('clearDiskCache');
 		settingsOpen.set(false);
 	}
 
@@ -113,10 +130,24 @@
 						>
 							{confirmReset ? '再次点击确认清除' : '恢复系统（清除磁盘数据）'}
 						</button>
+						<button
+							class="{actionBtn} {confirmClearCache
+								? 'border-red-500 text-red-400'
+								: ''}"
+							on:click={armClearCache}
+						>
+							{confirmClearCache ? '再次点击确认清除缓存' : '清除磁盘缓存'}
+						</button>
 					</div>
 					<p class="mt-2 text-[11px] text-zinc-500 leading-relaxed">
-						“恢复系统”会清除保存在浏览器 IndexedDB
-						中的虚拟磁盘写入缓存，把系统还原到镜像初始状态，然后自动刷新页面。
+						“恢复系统”只清除浏览器 IndexedDB
+						中的虚拟磁盘<b class="text-zinc-300">写入覆盖层</b>（你在系统里的修改），把系统还原到镜像初始状态；它<b
+							class="text-zinc-300">不会</b
+						>清除用于加速启动的只读磁盘块缓存。
+					</p>
+					<p class="mt-1 text-[11px] text-zinc-500 leading-relaxed">
+						“清除磁盘缓存”删除 Service Worker
+						缓存的只读磁盘分块。清除并刷新后，下一次启动需要重新按需下载磁盘块（首次命令会再次变慢，随后恢复）。
 					</p>
 				</section>
 
