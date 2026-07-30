@@ -6,7 +6,7 @@ const errs = [];
 p.on('pageerror', (e) => errs.push(String(e).slice(0, 200)));
 p.on('console', (m) => { if (m.type() === 'error') errs.push('[console.error] ' + m.text().slice(0, 200)); });
 await p.goto(URL, { waitUntil: 'load', timeout: 90000 });
-await p.waitForTimeout(70000);
+await p.waitForTimeout(90000);
 const info = await p.evaluate(() => {
 	const t = document.querySelector('.xterm')?.textContent ?? '';
 	return {

@@ -1,34 +1,32 @@
 #!/bin/bash
-# TEMPORARY diagnostic entrypoint: prints a marker before/after each warm-up
-# command so a live boot log reveals exactly which command hangs. Reverted once
-# the culprit is identified.
+# WangKe Web Linux entrypoint.
+#
+# Pre-warms a small set of frequently used commands so the first interactive
+# invocation is fast (disk blocks paged in + CheerpX JIT done), then hands over
+# to the login shell.
+#
+# PATH is set explicitly because CheerpX launches the CMD with a custom env
+# that does not include PATH.
+
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
 
 printf '\033[90mPreparing frequently used commands...\033[0m\n'
 
-printf '\033[90m[M] pre-timeout-true\033[0m\n'
-timeout 6 true >/dev/null 2>&1
-printf '\033[90m[M] post-timeout-true rc=%s\033[0m\n' "$?"
+# Foreground warm-up: these are proven to return quickly and never block.
+# `timeout` guards against any unexpected hang so the shell always starts.
+timeout 6 ls / >/dev/null 2>&1 || true
+timeout 6 free -h >/dev/null 2>&1 || true
+timeout 6 df -h >/dev/null 2>&1 || true
 
-printf '\033[90m[M] pre-ls\033[0m\n'
-timeout 6 ls / >/dev/null 2>&1
-printf '\033[90m[M] post-ls rc=%s\033[0m\n' "$?"
-
-printf '\033[90m[M] pre-free\033[0m\n'
-timeout 6 free -h >/dev/null 2>&1
-printf '\033[90m[M] post-free rc=%s\033[0m\n' "$?"
-
-printf '\033[90m[M] pre-df\033[0m\n'
-timeout 6 df -h >/dev/null 2>&1
-printf '\033[90m[M] post-df rc=%s\033[0m\n' "$?"
-
-printf '\033[90m[M] pre-py\033[0m\n'
-timeout 12 python3 -c "pass" >/dev/null 2>&1
-printf '\033[90m[M] post-py rc=%s\033[0m\n' "$?"
-
-printf '\033[90m[M] pre-git\033[0m\n'
-timeout 8 git --version >/dev/null 2>&1
-printf '\033[90m[M] post-git rc=%s\033[0m\n' "$?"
+# Background warm-up: python3 (and git) call getrandom() at start-up, which
+# blocks while the emulated kernel's RNG is still empty early in boot, and that
+# wait is NOT signal-interruptible under CheerpX -- so `timeout` cannot kill it
+# and a foreground run would block the shell. Detaching them warms the same
+# code paths as soon as the RNG is ready, without ever delaying the prompt.
+( python3 -c "pass" >/dev/null 2>&1 ) &
+( git --version >/dev/null 2>&1 ) &
+disown -a 2>/dev/null || true
 
 printf '\033[32mSystem ready.\033[0m\n'
+
 exec /bin/bash --login
