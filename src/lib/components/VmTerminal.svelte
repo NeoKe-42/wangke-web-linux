@@ -125,7 +125,7 @@
 					} else if (phase === 'starting-kernel') {
 						writeStatus(term, 'Starting Linux (CheerpX x86 → WebAssembly JIT)');
 					} else if (phase === 'running') {
-						writeStatus(term, 'Console attached — handing over to /bin/bash');
+						writeStatus(term, 'Console attached — handing over to the login shell');
 						if (vmConfig.identity === 'official') {
 							for (const line of fallbackIntro) term.writeln(line);
 						}
