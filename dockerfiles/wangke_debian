@@ -67,7 +67,7 @@ RUN chown -R wangke:wangke /home/wangke && \
 
 # Extracted by the image build tooling as the VM cwd / env.
 # xterm-256color so vim/htop/neofetch/ls render full color.
-WORKDIR /home/wangke/
+WORKDIR /home/wangke
 ENV HOME="/home/wangke" TERM="xterm-256color" USER="wangke" SHELL="/bin/bash" EDITOR="vim" LANG="C.UTF-8"
 
 # wangke-start warms common commands, then execs the login shell. The Deploy
