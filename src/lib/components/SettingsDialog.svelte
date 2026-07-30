@@ -128,7 +128,7 @@
 								: ''}"
 							on:click={armReset}
 						>
-							{confirmReset ? '再次点击确认清除' : '恢复系统（清除磁盘数据）'}
+							{confirmReset ? '再次点击确认清除' : '恢复系统（清除写入数据）'}
 						</button>
 						<button
 							class="{actionBtn} {confirmClearCache

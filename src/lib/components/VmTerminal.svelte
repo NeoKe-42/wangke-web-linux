@@ -8,6 +8,7 @@
 	import { playBootLog, writeStatus } from '$lib/terminal/boot';
 	import {
 		startVm,
+		prepareVmRuntime,
 		checkBrowserSupport,
 		describeVmError,
 		type VmHandle,
@@ -89,11 +90,19 @@
 	}
 
 	onMount(async () => {
+		const bootStartedAt = performance.now();
+		const recordBootTiming = (stage: string) => {
+			const elapsedMs = performance.now() - bootStartedAt;
+			console.info(`[VM boot] ${stage}: ${elapsedMs.toFixed(1)} ms`);
+			performance.mark(`wangke-vm:${stage}`);
+		};
+
 		termHandle = createTerminal(consoleEl);
 		const term = termHandle.term;
 		term.onData(send);
 		window.addEventListener('resize', onResize);
 		window.addEventListener('beforeunload', onBeforeUnload);
+		recordBootTiming('terminal-ready');
 
 		const unsupported = checkBrowserSupport();
 		if (unsupported) {
@@ -103,7 +112,16 @@
 
 		try {
 			vmPhase.set('booting');
-			await playBootLog(term, bootLines);
+			const runtimeReady = prepareVmRuntime();
+			recordBootTiming('cheerpx-load-started');
+			void runtimeReady.then(
+				() => recordBootTiming('cheerpx-runtime-ready'),
+				() => recordBootTiming('cheerpx-runtime-failed')
+			);
+
+			// This is display-only and synchronous: it never delays VM startup.
+			playBootLog(term, bootLines);
+			recordBootTiming('boot-log-complete');
 
 			const io: VmIo = {
 				write: (buf, vt) => {
@@ -121,10 +139,13 @@
 				onPhase: (phase, detail) => {
 					vmPhase.set(phase);
 					if (phase === 'loading-disk') {
+						recordBootTiming('disk-device-started');
 						writeStatus(term, `Loading virtual disk image (${detail ?? vmConfig.diskImageUrl})`);
 					} else if (phase === 'starting-kernel') {
+						recordBootTiming('linux-create-started');
 						writeStatus(term, 'Starting Linux (CheerpX x86 → WebAssembly JIT)');
 					} else if (phase === 'running') {
+						recordBootTiming('linux-ready-command-started');
 						writeStatus(term, 'Console attached — handing over to the login shell');
 						if (vmConfig.identity === 'official') {
 							for (const line of fallbackIntro) term.writeln(line);

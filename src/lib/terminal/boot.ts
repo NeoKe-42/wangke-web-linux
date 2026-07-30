@@ -1,9 +1,5 @@
 import type { Terminal } from '@xterm/xterm';
 
-export function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 let bootStart = 0;
 
 export function resetBootClock(): void {
@@ -28,17 +24,13 @@ function colorize(line: string): string {
 	return `${CYAN}${m[1]}${RESET}${BRIGHT}${m[2]}${RESET}`;
 }
 
-/** Types the simulated boot log line by line. */
-export async function playBootLog(
-	term: Terminal,
-	lines: string[],
-	lineDelayMs = 200
-): Promise<void> {
+/**
+ * Writes the simulated boot summary without delaying the real VM startup.
+ * Actual elapsed-time status lines are emitted by writeStatus() below.
+ */
+export function playBootLog(term: Terminal, lines: string[]): void {
 	resetBootClock();
-	for (const line of lines) {
-		term.writeln(colorize(line));
-		await sleep(lineDelayMs + Math.random() * 150);
-	}
+	for (const line of lines) term.writeln(colorize(line));
 }
 
 /** Writes a real status line (actual elapsed time) while the VM loads. */

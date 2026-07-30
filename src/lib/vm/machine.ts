@@ -1,5 +1,19 @@
 import { networkInterface } from './network';
+import { prepareDiskDownloadCache } from './diskCache';
 import type { VmConfig, VmPhase } from './types';
+
+type CheerpXModule = typeof import('@leaningtech/cheerpx');
+
+let runtimePromise: Promise<CheerpXModule> | undefined;
+
+/**
+ * Start loading the remote CheerpX runtime as early as possible. Dynamic
+ * imports are cached, so startVm() reuses this same request and module.
+ */
+export function prepareVmRuntime(): Promise<CheerpXModule> {
+	runtimePromise ??= import('@leaningtech/cheerpx');
+	return runtimePromise;
+}
 
 /**
  * Thin, typed wrapper around the CheerpX virtualization engine.
@@ -50,7 +64,12 @@ export function describeVmError(e: unknown): string {
 }
 
 export async function startVm(config: VmConfig, io: VmIo, events: VmEvents): Promise<VmHandle> {
-	const CheerpX = await import('@leaningtech/cheerpx');
+	const runtimeReady = prepareVmRuntime();
+	const diskCacheReady =
+		config.diskImageType === 'github'
+			? prepareDiskDownloadCache(config.diskImageUrl)
+			: Promise.resolve();
+	const CheerpX = await runtimeReady;
 
 	// 1. Root filesystem image.
 	events.onPhase('loading-disk', config.diskImageUrl);
@@ -74,6 +93,7 @@ export async function startVm(config: VmConfig, io: VmIo, events: VmEvents): Pro
 			blockDevice = await CheerpX.HttpBytesDevice.create(config.diskImageUrl);
 			break;
 		case 'github':
+			await diskCacheReady;
 			blockDevice = await CheerpX.GitHubDevice.create(config.diskImageUrl);
 			break;
 		default:

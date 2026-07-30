@@ -17,14 +17,14 @@ const IDENTITY_KEY = "__disk_image_identity__";
 const CHUNK_RE = /\.ext2\.c[0-9a-f]+\.txt$/i;
 const META_RE = /\.ext2\.meta$/i;
 
-// SW-global state (lives as long as this worker instance, i.e. across page
-// reloads within one browser session).
-let diskDir = null;        // pathname directory of the active disk image
-let knownIdentity = null;  // last image identity we observed
+// SW-global state (lives as long as this worker instance).
+let diskDir = null; // URL directory of the active disk image
+let knownIdentity = null; // last image identity we observed
 
 /** Extract the ext2 base name ("foo_20260730_123.ext2") from a chunk/meta URL. */
 function getDiskImageIdentity(url) {
-	const m = String(url).match(/([^/]+\.ext2)\.(?:c[0-9a-f]+\.txt|meta)$/i);
+	const pathname = new URL(url, self.location.href).pathname;
+	const m = pathname.match(/([^/]+\.ext2)(?:\.(?:c[0-9a-f]+\.txt|meta))?$/i);
 	return m ? m[1] : null;
 }
 
@@ -33,13 +33,19 @@ function isIndexPathname(pathname) {
 }
 
 function directoryOf(url) {
-	return new URL(url).pathname.replace(/[^/]*$/, "");
+	const parsed = new URL(url, self.location.href);
+	return `${parsed.origin}${parsed.pathname.replace(/[^/]*$/, "")}`;
+}
+
+function serviceWorkerScopeDirectory() {
+	return directoryOf(self.registration.scope);
 }
 
 /**
- * True for CheerpX disk reads we want to cache. The app never references
- * index.list itself, so any index.list the worker observes is a CheerpX
- * httpfs directory listing; we still scope it to the disk image directory.
+ * True for CheerpX disk reads we want to cache. index.list is accepted only
+ * from the active image directory. Before the page has announced that
+ * directory, the registration scope is the safe fallback because the deploy
+ * workflow puts the image and its index.list next to the app.
  */
 function isDiskRequest(request) {
 	if (request.method !== "GET") return false;
@@ -47,11 +53,7 @@ function isDiskRequest(request) {
 	if (CHUNK_RE.test(url.pathname) || META_RE.test(url.pathname)) return true;
 	if (isIndexPathname(url.pathname)) {
 		const dir = directoryOf(url);
-		if (diskDir === null) {
-			diskDir = dir; // first listing we see defines the disk directory
-			return true;
-		}
-		return dir === diskDir;
+		return dir === (diskDir ?? serviceWorkerScopeDirectory());
 	}
 	return false;
 }
@@ -127,6 +129,21 @@ function noteIdentity(identity) {
 	})();
 }
 
+/**
+ * The page announces the configured image before GitHubDevice asks for
+ * index.list. This lets us invalidate a previous deployment's cached listing
+ * before it can hide the newly named image.
+ */
+async function setActiveDiskImage(imageUrl) {
+	const absoluteUrl = new URL(imageUrl, self.registration.scope).href;
+	const identity = getDiskImageIdentity(absoluteUrl);
+	if (!identity) return;
+	diskDir = directoryOf(absoluteUrl);
+	// Always refresh the persisted marker. This is cheap when the identity is
+	// unchanged and also restores it after the user explicitly clears caches.
+	await noteIdentity(identity);
+}
+
 /** Cache-first read for disk blocks; stores only successful basic responses. */
 async function handleDiskFetch(request, event) {
 	const cache = await caches.open(DISK_CACHE);
@@ -188,6 +205,14 @@ function serviceWorkerInit() {
 			// Everything else keeps the original header-injection behaviour.
 			e.respondWith(fetchAndPatch(request));
 		}
+	});
+
+	self.addEventListener("message", (e) => {
+		if (e.data?.type !== "SET_ACTIVE_DISK_IMAGE" || typeof e.data.url !== "string") return;
+		const update = setActiveDiskImage(e.data.url).finally(() => {
+			e.ports[0]?.postMessage({ type: "ACTIVE_DISK_IMAGE_SET" });
+		});
+		e.waitUntil(update);
 	});
 }
 
