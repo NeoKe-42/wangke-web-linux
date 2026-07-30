@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
+	import { base } from '$app/paths';
 	import StatusBar from './StatusBar.svelte';
 	import SettingsDialog from './SettingsDialog.svelte';
 	import MobileKeys from './MobileKeys.svelte';
@@ -100,6 +101,20 @@
 		termHandle = createTerminal(consoleEl);
 		const term = termHandle.term;
 		term.onData(send);
+		term.parser.registerOscHandler(777, (data) => {
+			if (data !== 'wangke:open-blog') return false;
+
+			const blogUrl = new URL(`${base}/blog`, window.location.origin).href;
+			const blogWindow = window.open(blogUrl, '_blank');
+			if (blogWindow) {
+				blogWindow.opener = null;
+			} else {
+				queueMicrotask(() => {
+					term.writeln(`\r\n\x1b[33mPopup blocked.\x1b[0m Open the Blog URL printed below.`);
+				});
+			}
+			return true;
+		});
 		window.addEventListener('resize', onResize);
 		window.addEventListener('beforeunload', onBeforeUnload);
 		recordBootTiming('terminal-ready');
