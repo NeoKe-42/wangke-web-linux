@@ -1,31 +1,34 @@
 #!/bin/bash
-# WangKe Web Linux entrypoint.
-#
-# Pre-warms a small set of frequently used commands so that the first time the
-# user runs them at the interactive prompt they are already fast: their disk
-# blocks have been paged in and CheerpX has JIT-compiled them. The warm-up
-# runs silently before the login shell (and therefore before the prompt).
-#
-# Every warm-up command is bounded by `timeout`: a command that fails OR hangs
-# (e.g. python3's getrandom() can block for a long time while the emulated
-# kernel's entropy pool is still empty early in boot) must never delay or block
-# the shell. Commands that complete normally are warmed; ones that time out are
-# simply skipped and still work normally when the user runs them later.
-#
-# PATH is set explicitly because CheerpX launches the CMD with a custom env
-# that does not include PATH; this keeps the warm-up robust regardless of the
-# shell's built-in default PATH.
-
+# TEMPORARY diagnostic entrypoint: prints a marker before/after each warm-up
+# command so a live boot log reveals exactly which command hangs. Reverted once
+# the culprit is identified.
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
 
 printf '\033[90mPreparing frequently used commands...\033[0m\n'
 
-timeout 6 ls / >/dev/null 2>&1 || true
-timeout 6 free -h >/dev/null 2>&1 || true
-timeout 6 df -h >/dev/null 2>&1 || true
-timeout 12 python3 -c "pass" >/dev/null 2>&1 || true
-timeout 8 git --version >/dev/null 2>&1 || true
+printf '\033[90m[M] pre-timeout-true\033[0m\n'
+timeout 6 true >/dev/null 2>&1
+printf '\033[90m[M] post-timeout-true rc=%s\033[0m\n' "$?"
+
+printf '\033[90m[M] pre-ls\033[0m\n'
+timeout 6 ls / >/dev/null 2>&1
+printf '\033[90m[M] post-ls rc=%s\033[0m\n' "$?"
+
+printf '\033[90m[M] pre-free\033[0m\n'
+timeout 6 free -h >/dev/null 2>&1
+printf '\033[90m[M] post-free rc=%s\033[0m\n' "$?"
+
+printf '\033[90m[M] pre-df\033[0m\n'
+timeout 6 df -h >/dev/null 2>&1
+printf '\033[90m[M] post-df rc=%s\033[0m\n' "$?"
+
+printf '\033[90m[M] pre-py\033[0m\n'
+timeout 12 python3 -c "pass" >/dev/null 2>&1
+printf '\033[90m[M] post-py rc=%s\033[0m\n' "$?"
+
+printf '\033[90m[M] pre-git\033[0m\n'
+timeout 8 git --version >/dev/null 2>&1
+printf '\033[90m[M] post-git rc=%s\033[0m\n' "$?"
 
 printf '\033[32mSystem ready.\033[0m\n'
-
 exec /bin/bash --login
