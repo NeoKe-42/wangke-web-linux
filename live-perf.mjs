@@ -59,6 +59,10 @@ const free2 = await runTimed(page, 'time free -h');
 const df1 = await runTimed(page, 'time df -h');
 const df2 = await runTimed(page, 'time df -h');
 const neo1 = await runTimed(page, 'time neofetch');
+// prompt-time hang probe for the new caching SW (also informational timings)
+const ls1 = await runTimed(page, 'time ls /');
+const py1 = await runTimed(page, 'time python3 -c "print(6*7)"');
+const git1 = await runTimed(page, 'time git --version');
 
 // reload: blocks should now come from the SW disk cache
 phase = 'reload';
@@ -88,6 +92,9 @@ console.log(
 			df_1st_manual_ms: fmt(df1),
 			df_2nd_ms: fmt(df2),
 			neofetch_not_prewarmed_ms: fmt(neo1),
+			ls_at_prompt_ms: fmt(ls1),
+			python3_at_prompt_ms: fmt(py1),
+			git_at_prompt_ms: fmt(git1),
 			free_after_reload_ms: fmt(freeReload)
 		},
 		null,

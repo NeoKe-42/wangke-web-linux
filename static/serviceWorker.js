@@ -128,7 +128,7 @@ function noteIdentity(identity) {
 }
 
 /** Cache-first read for disk blocks; stores only successful basic responses. */
-async function handleDiskFetch(request) {
+async function handleDiskFetch(request, event) {
 	const cache = await caches.open(DISK_CACHE);
 	const cached = await cache.match(request);
 	if (cached) return cached;
@@ -144,12 +144,14 @@ async function handleDiskFetch(request) {
 		throw error;
 	}
 
-	// Cache the already-patched response. A constructed Response has type
-	// "default" (not "basic"); opaque responses are already excluded inside
-	// fetchAndPatch, so "not opaque" + ok + 200 is the correct gate.
 	if (response && response.ok && response.status === 200 && response.type !== "opaque") {
-		// clone because the body stream is consumed by the returned response
-		void cache.put(request, response.clone()).catch(() => {});
+		// The cloned body must be fully written before the worker can idle,
+		// otherwise the stored entry is truncated and a later cache hit returns
+		// a broken body (which hangs the emulated disk read). waitUntil keeps
+		// the worker alive without delaying the response we hand back.
+		const store = cache.put(request, response.clone()).catch(() => {});
+		if (event) event.waitUntil(store);
+		else await store;
 	}
 	return response;
 }
@@ -181,7 +183,7 @@ function serviceWorkerInit() {
 			if (identity && identity !== knownIdentity) {
 				e.waitUntil(noteIdentity(identity));
 			}
-			e.respondWith(handleDiskFetch(request));
+			e.respondWith(handleDiskFetch(request, e));
 		} else {
 			// Everything else keeps the original header-injection behaviour.
 			e.respondWith(fetchAndPatch(request));
